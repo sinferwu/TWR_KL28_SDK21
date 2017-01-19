@@ -154,7 +154,7 @@ USB_DATA_ALIGNMENT uint8_t audioFeedBackBuffer[3] = {0x00U, 0x00U, 0x04U};
 volatile uint32_t startSai = 0;
 volatile uint32_t audioTempBuffer;
 uint16_t epPacketSize = FS_ISO_OUT_ENDP_PACKET_SIZE;
-extern usb_device_class_struct_t g_UsbDeviceAudioClass;
+
 volatile uint32_t sendCount = 0;
 volatile uint32_t recvCount = 0;
 volatile int32_t prevSendCountInterval = ((AUDIO_DATA_WHOLE_BUFFER_LENGTH / 2) * (FS_ISO_OUT_ENDP_PACKET_SIZE));
@@ -166,10 +166,15 @@ volatile bool isFinished = false;
 volatile int32_t prevSendCount =
     -(AUDIO_DATA_WHOLE_BUFFER_LENGTH / 2 * (FS_ISO_OUT_ENDP_PACKET_SIZE / (DEMO_SAI_BITWIDTH / 8U)));
 
+
+extern usb_device_class_struct_t g_UsbDeviceAudioClassRecorder;
+extern usb_device_class_struct_t g_UsbDeviceAudioClassSpeaker;
+
 /* Default value of audio generator device struct */
 usb_audio_speaker_struct_t s_audioSpeaker = {
     .deviceHandle = NULL,
-    .audioHandle = (class_handle_t)NULL,
+    .audioSpeakerHandle = (class_handle_t)NULL,
+    .audioRecorderHandle = (class_handle_t)NULL,
     .speed = USB_SPEED_FULL,
     .attach = 0U,
     .copyProtect = 0x01U,
@@ -210,13 +215,18 @@ usb_audio_speaker_struct_t s_audioSpeaker = {
 };
 
 /* USB device class information */
-static usb_device_class_config_struct_t s_audioConfig[1] = {{
-    USB_DeviceAudioCallback, (class_handle_t)NULL, &g_UsbDeviceAudioClass,
-}};
+static usb_device_class_config_struct_t s_audioConfig[2] = {
+  {
+    USB_DeviceAudioCallback, (class_handle_t)NULL, &g_UsbDeviceAudioClassRecorder,
+  },
+  {
+    USB_DeviceAudioCallback, (class_handle_t)NULL, &g_UsbDeviceAudioClassSpeaker,
+  }
+};
 
 /* USB device class configuraion information */
 static usb_device_class_config_list_struct_t s_audioConfigList = {
-    s_audioConfig, USB_DeviceCallback, 1U,
+    s_audioConfig, USB_DeviceCallback, 2U,
 };
 
 /*******************************************************************************
@@ -822,7 +832,7 @@ usb_status_t USB_DeviceAudioCallback(class_handle_t handle, uint32_t event, void
         case kUSB_DeviceAudioEventStreamSendResponse:
             if ((s_audioSpeaker.attach) && (ep_cb_param->length != (USB_UNINITIALIZED_VAL_32)))
             {
-                error = USB_DeviceAudioSend(s_audioSpeaker.audioHandle, USB_AUDIO_FEEDBACK_ENDPOINT,
+                error = USB_DeviceAudioSend(s_audioSpeaker.audioSpeakerHandle, USB_AUDIO_SPEAKER_FEEDBACK_ENDPOINT,
                                             audioFeedBackBuffer, ISO_FEEDBACK_ENDP_PACKET_SIZE);
             }
             break;
@@ -843,7 +853,7 @@ usb_status_t USB_DeviceAudioCallback(class_handle_t handle, uint32_t event, void
                 }
 
                 /* request next data to the current buffer */
-                error = USB_DeviceAudioRecv(handle, USB_AUDIO_STREAM_ENDPOINT, &audioDataBuff[tdReadNumber][0],
+                error = USB_DeviceAudioRecv(handle, USB_AUDIO_SPEAKER_STREAM_ENDPOINT, &audioDataBuff[tdReadNumber][0],
                                             FS_ISO_OUT_ENDP_PACKET_SIZE * 2);
                 USB_AudioDataMatch(ep_cb_param->length);
             }
@@ -920,10 +930,19 @@ usb_status_t USB_DeviceCallback(usb_device_handle handle, uint32_t event, void *
                         {
                             epPacketSize = FS_ISO_OUT_ENDP_PACKET_SIZE;
                         }
-                        USB_DeviceAudioRecv(s_audioSpeaker.audioHandle, USB_AUDIO_STREAM_ENDPOINT, &audioDataBuff[0][0],
+
+                        if(interface == USB_AUDIO_RECORDER_STREAM_INTERFACE_INDEX)
+                        {
+
+
+                        }
+                        if(interface == USB_AUDIO_SPEAKER_STREAM_INTERFACE_INDEX)
+                        {
+                            USB_DeviceAudioRecv(s_audioSpeaker.audioSpeakerHandle, USB_AUDIO_SPEAKER_STREAM_ENDPOINT, &audioDataBuff[0][0],
                                             FS_ISO_OUT_ENDP_PACKET_SIZE * 2);
-                        USB_DeviceAudioSend(s_audioSpeaker.audioHandle, USB_AUDIO_FEEDBACK_ENDPOINT,
+                            USB_DeviceAudioSend(s_audioSpeaker.audioSpeakerHandle, USB_AUDIO_SPEAKER_FEEDBACK_ENDPOINT,
                                             audioFeedBackBuffer, ISO_FEEDBACK_ENDP_PACKET_SIZE);
+                        }
                     }
                 }
             }
@@ -1107,7 +1126,8 @@ void APPInit(void)
     else
     {
         usb_echo("USB device audio speaker demo\r\n");
-        s_audioSpeaker.audioHandle = s_audioConfigList.config->classHandle;
+        s_audioSpeaker.audioRecorderHandle = s_audioConfigList.config[0].classHandle;
+        s_audioSpeaker.audioSpeakerHandle = s_audioConfigList.config[1].classHandle;
     }
 
 /* Install isr, set priority, and enable IRQ. */

@@ -84,7 +84,8 @@
 typedef struct _usb_audio_speaker_struct
 {
     usb_device_handle deviceHandle; /* USB device handle.                   */
-    class_handle_t audioHandle;     /* USB AUDIO GENERATOR class handle.    */
+    class_handle_t audioSpeakerHandle;     /* USB AUDIO GENERATOR class handle.    */
+    class_handle_t audioRecorderHandle;
     uint8_t copyProtect;
     uint8_t curMute;
     uint8_t curVolume[2];

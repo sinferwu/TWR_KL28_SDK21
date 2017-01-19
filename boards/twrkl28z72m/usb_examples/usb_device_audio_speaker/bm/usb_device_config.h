@@ -105,7 +105,7 @@
 #define USB_DEVICE_CONFIG_MSC (0U)
 
 /*! @brief Audio instance count */
-#define USB_DEVICE_CONFIG_AUDIO (1U)
+#define USB_DEVICE_CONFIG_AUDIO (2U)
 
 /*! @brief PHDC instance count */
 #define USB_DEVICE_CONFIG_PHDC (0U)
