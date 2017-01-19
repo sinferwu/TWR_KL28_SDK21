@@ -1,0 +1,86 @@
+Overview
+========
+CMSIS-Driver defines generic peripheral driver interfaces for middleware making it reusable across a wide 
+range of supported microcontroller devices. The API connects microcontroller peripherals with middleware 
+that implements for example communication stacks, file systems, or graphic user interfaces. 
+More information and usage methord please refer to http://www.keil.com/pack/doc/cmsis/Driver/html/index.html.
+
+The cmsis_lpi2c_interrupt_transfer example shows how to use LPI2C CMSIS driver in interrupt way:
+
+In this example , one lpi2c instance used as LPI2C master and another lpi2c instance used as LPI2C slave .
+1. LPI2C master send data to LPI2C slave with interrupt . (LPI2C Slave using interrupt to receive the data)
+2. LPI2C master read data from LPI2C slave with interrupt . (LPI2C Slave using interrupt to send the data)
+3. LPI2C master abort transfer when send 23 data(LPI2C master send data to LPI2C slave with interrupt.I2C Slave using interrupt to receive the data)
+4. LPI2C slave abort transfer when receive 23 data(LPI2C master send data to LPI2C slave with interrupt.I2C Slave using interrupt to receive the data)
+5. LPI2C master read data from LPI2C slave with interrupt in nostop mode. (LPI2C Slave using interrupt to send the data) then LPI2C master read data again. 
+6. LPI2C master send data to LPI2C slave with interrupt in nostop mode. (LPI2C Slave using interrupt to read the data) then LPI2C master send data again.
+
+
+Toolchain supported
+===================
+- IAR embedded Workbench 7.80.2
+- Keil MDK 5.21a
+- GCC ARM Embedded 2016-5-q3
+- Kinetis Development Studio IDE 3.2.0
+- MCUXpresso0.8
+
+Hardware requirements
+=====================
+- Mini USB cable
+- TWR-KL28Z72M board
+- Primary Elevator
+- Personal Computer
+
+Board settings
+==============
+The example requires connecting the between two LPI2C pins
+Insert TWR-KL28Z72M board into Primary Elevator. The connection should be set as following:
+        LPI2C1              connected to     LPI2C2
+SCL     PTE1(Elevator-B45)      -->          PTA12(Elevator-A25)
+SDA     PTE0(Elevator-A35)      -->          PTA13(Elevator-A23)
+
+Prepare the Demo
+================
+1. Connect a mini USB cable between the PC host and the OpenSDA USB port on the board.
+2. Open a serial terminal on PC for JLink serial device with these settings:
+   - 115200 baud rate
+   - 8 data bits
+   - No parity
+   - One stop bit
+   - No flow control
+3. Download the program to the target board.
+4. Either press the reset button on your board or launch the debugger in your IDE to begin running
+   the demo.
+
+Running the demo
+================
+The following message shows in the terminal if the example runs successfully.
+test interrupt transfer
+Master will send data :
+0x 0  0x 1  0x 2  0x 3  0x 4  0x 5  0x 6  0x 7
+0x 8  0x 9  0x a  0x b  0x c  0x d  0x e  0x f
+0x10  0x11  0x12  0x13  0x14  0x15  0x16  0x17
+0x18  0x19  0x1a  0x1b  0x1c  0x1d  0x1e  0x1f
+
+
+Slave received data :
+0x 0  0x 1  0x 2  0x 3  0x 4  0x 5  0x 6  0x 7
+0x 8  0x 9  0x a  0x b  0x c  0x d  0x e  0x f
+0x10  0x11  0x12  0x13  0x14  0x15  0x16  0x17
+0x18  0x19  0x1a  0x1b  0x1c  0x1d  0x1e  0x1f
+
+slave will send data :
+0x 0  0x 1  0x 2  0x 3  0x 4  0x 5  0x 6  0x 7
+0x 8  0x 9  0x a  0x b  0x c  0x d  0x e  0x f
+0x10  0x11  0x12  0x13  0x14  0x15  0x16  0x17
+0x18  0x19  0x1a  0x1b  0x1c  0x1d  0x1e  0x1f
+
+
+master received data :
+0x 0  0x 1  0x 2  0x 3  0x 4  0x 5  0x 6  0x 7
+0x 8  0x 9  0x a  0x b  0x c  0x d  0x e  0x f
+0x10  0x11  0x12  0x13  0x14  0x15  0x16  0x17
+0x18  0x19  0x1a  0x1b  0x1c  0x1d  0x1e  0x1f 
+Customization options
+=====================
+
