@@ -88,16 +88,16 @@ usb_device_endpoint_struct_t g_UsbDeviceAudioRecorderEndpoints[USB_AUDIO_RECORDE
 
 usb_device_endpoint_struct_t g_UsbDeviceAudioSpeakerEndpoints[USB_AUDIO_SPEAKER_STREAM_ENDPOINT_COUNT] = {
     /* Audio generator ISO OUT pipe */
-    {
-        USB_AUDIO_SPEAKER_STREAM_ENDPOINT | (USB_OUT << USB_DESCRIPTOR_ENDPOINT_ADDRESS_DIRECTION_SHIFT),
-        USB_ENDPOINT_ISOCHRONOUS,
-        FS_ISO_OUT_ENDP_PACKET_SIZE * 2, /* The max packet size should be increased otherwise if host send data larger
-                                            than max packet size will cause DMA error. */
-    },
+	{
+	    USB_AUDIO_SPEAKER_STREAM_ENDPOINT | (USB_OUT << USB_DESCRIPTOR_ENDPOINT_ADDRESS_DIRECTION_SHIFT),
+	    USB_ENDPOINT_ISOCHRONOUS, FS_ISO_OUT_ENDP_PACKET_SIZE,
+	},
+#if (USE_FEEDBACK_ENDPOINT == 1)
     {
         USB_AUDIO_SPEAKER_FEEDBACK_ENDPOINT | (USB_IN << USB_DESCRIPTOR_ENDPOINT_ADDRESS_DIRECTION_SHIFT),
         USB_ENDPOINT_ISOCHRONOUS, ISO_FEEDBACK_ENDP_PACKET_SIZE,
     }
+#endif
 };
 
 /* Audio speaker control endpoint information */
@@ -543,7 +543,8 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
 	USB_AUDIO_RECORDER_CONTROL_INPUT_TERMINAL_ID, /* Constant uniquely identifying the Terminal within the audio function. This value is used in all requests
               to address this Terminal.  */
     0x01U, 0x02,  /* A generic microphone that does not fit under any of the other classifications.  */
-    0x00U,        /* This Input Terminal has no association  */
+    //0x03U, 0x06U,   /* An analog connector at standard line levels. */
+	0x00U,        /* This Input Terminal has no association  */
     0x01U,        /* This Terminal's output audio channel cluster has 1 logical output channels  */
     0x00U, 0x00U, /* Spatial locations present in the cluster */
     0x00U,        /* Index of a string descriptor, describing the name of the first logical channel.   */
@@ -559,8 +560,9 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
               address this Unit.  */
 	USB_AUDIO_RECORDER_CONTROL_INPUT_TERMINAL_ID, /* ID of the Unit or Terminal to which this Feature Unit is connected.    */
     0x01U, /* Size in bytes of an element of the bmaControls() array:  */
-    0x03, 0x00U, /* Master channel controls */
-    0x00U,       /* Index of a string descriptor, describing this Feature Unit.   */
+    0x03,  /* Master channel controls */
+    0x00,  /* Logic channel 1 controls */
+	0x00U,       /* Index of a string descriptor, describing this Feature Unit.   */
 
     /* Audio Class Specific type of  Output Terminal */
     USB_AUDIO_OUTPUT_TERMINAL_ONLY_DESC_SIZE, /* Size of the descriptor, in bytes  */
@@ -595,8 +597,9 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
               address this Unit.  */
     USB_AUDIO_SPEAKER_CONTROL_INPUT_TERMINAL_ID, /* ID of the Unit or Terminal to which this Feature Unit is connected.    */
     0x01U, /* Size in bytes of an element of the bmaControls() array:  */
-    0x03, 0x00U, /* Master channel controls */
-    0x00U,       /* Index of a string descriptor, describing this Feature Unit.   */
+    0x03,  /* Master channel controls */
+	0x00U, /* Logic channel 1 controls */
+	0x00U,       /* Index of a string descriptor, describing this Feature Unit.   */
 
     /* Audio Class Specific type of Output Terminal */
     USB_AUDIO_OUTPUT_TERMINAL_ONLY_DESC_SIZE, /* Size of the descriptor, in bytes  */
@@ -647,7 +650,7 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     USB_DESCRIPTOR_SUBTYPE_AUDIO_STREAMING_GENERAL, /* AS_GENERAL descriptor subtype  */
 	USB_AUDIO_RECORDER_CONTROL_OUTPUT_TERMINAL_ID,        /* The Terminal ID of the Terminal to which the endpoint of this interface is connected. */
     0x00U,        /* Delay introduced by the data path. Expressed in number of frames.  */
-    0x02U, 0x00U, /* PCM8  */
+    0x02U, 0x00U, /* PCM  */
 
     /* Audio Class Specific type I format INTERFACE Descriptor */
     USB_AUDIO_STREAMING_TYPE_I_DESC_SIZE,   /* Size of the descriptor, in bytes  */
@@ -666,8 +669,8 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     USB_DESCRIPTOR_TYPE_ENDPOINT,              /* ENDPOINT Descriptor Type   */
     USB_AUDIO_RECORDER_STREAM_ENDPOINT | (USB_IN << 7), /* This is an IN endpoint with endpoint number 2   */
     USB_ENDPOINT_ISOCHRONOUS,                  /* Types - Transfer: ISOCHRONOUS */
-    USB_SHORT_GET_LOW(FS_ISO_IN_ENDP_PACKET_SIZE),
-    USB_SHORT_GET_HIGH(FS_ISO_IN_ENDP_PACKET_SIZE), /* Maximum packet size for this endpoint is 8 Bytes.  */
+    USB_SHORT_GET_LOW(FS_ISO_IN_ENDP_PACKET_SIZE*2),
+    USB_SHORT_GET_HIGH(FS_ISO_IN_ENDP_PACKET_SIZE*2), /* Maximum packet size for this endpoint is 8 Bytes.  */
     FS_ISO_IN_ENDP_INTERVAL, /* The polling interval value is every 1 Frames. If Hi-Speed, every 1 uFrames   */
     0x00U,                /* Refresh Rate 2**n ms where n = 0   */
     0x00U,                /* Synchronization Endpoint (if used) is endpoint 0   */
@@ -699,7 +702,11 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     USB_DESCRIPTOR_TYPE_INTERFACE,    /* INTERFACE Descriptor Type  */
     USB_AUDIO_SPEAKER_STREAM_INTERFACE_INDEX, /*The number of this interface is 1.  */
     0x01U,                            /* The value used to select the alternate setting for this interface is 1  */
+#if(USE_FEEDBACK_ENDPOINT == 1)
     0x02U,                    /* The number of endpoints used by this interface is 2 (excluding endpoint zero)    */
+#else
+	0x01U,
+#endif
     USB_AUDIO_CLASS,          /* The interface implements the Audio Interface class   */
     USB_SUBCLASS_AUDIOSTREAM, /* The interface implements the AUDIOSTREAMING Subclass   */
     0x00U,                    /* The interface doesn't use any class-specific protocols  */
@@ -711,7 +718,7 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     USB_DESCRIPTOR_SUBTYPE_AUDIO_STREAMING_GENERAL, /* AS_GENERAL descriptor subtype  */
 	USB_AUDIO_SPEAKER_CONTROL_INPUT_TERMINAL_ID,        /* The Terminal ID of the Terminal to which the endpoint of this interface is connected. */
     0x01U,        /* Delay introduced by the data path. Expressed in number of frames.  */
-    0x01U, 0x00U, /* PCM8  */
+    0x02U, 0x00U, /* PCM  */
 
     /* Audio Class Specific type I format INTERFACE Descriptor */
     USB_AUDIO_STREAMING_TYPE_I_DESC_SIZE,               /* bLength (11) */
@@ -737,9 +744,13 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     USB_SHORT_GET_HIGH(FS_ISO_OUT_ENDP_PACKET_SIZE * 2), /* 16 bytes  */
     FS_ISO_OUT_ENDP_INTERVAL,                               /* bInterval(0x01U): x ms */
     0x00U,                                               /* Unused */
+#if(USE_FEEDBACK_ENDPOINT == 1)
     USB_AUDIO_SPEAKER_FEEDBACK_ENDPOINT |
         (USB_IN
          << USB_DESCRIPTOR_ENDPOINT_ADDRESS_DIRECTION_SHIFT), /* Synchronization Endpoint (if used) is endpoint 0x83  */
+#else
+    0x00U,
+#endif
 
     /* Audio Class Specific ENDPOINT Descriptor  */
     USB_AUDIO_STREAMING_ENDP_DESC_SIZE,      /*  Size of the descriptor, in bytes  */
@@ -752,6 +763,7 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     0x00U,
     0x00U, /* Indicates the time it takes this endpoint to reliably lock its internal clock recovery circuitry */
 
+#if(USE_FEEDBACK_ENDPOINT == 1)
     /* Endpoint 3 Feedback ENDPOINT */
     USB_ENDPOINT_AUDIO_DESCRIPTOR_LENGTH, /* bLength */
     USB_DESCRIPTOR_TYPE_ENDPOINT,         /* bDescriptorType */
@@ -766,6 +778,7 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     0x01, /* interval polling(2^x ms) */
     0x05, /* bRefresh(32ms)  */
     0x00, /* unused */
+#endif
 #endif /* AUDIO_CLASS_2_0 */
 };
 
@@ -1016,12 +1029,16 @@ usb_status_t USB_DeviceSetSpeed(usb_device_handle handle, uint8_t speed)
     if (USB_SPEED_HIGH == speed)
     {
         g_UsbDeviceAudioSpeakerEndpoints[0].maxPacketSize = 2 * HS_ISO_OUT_ENDP_PACKET_SIZE;
+#if(USE_FEEDBACK_ENDPOINT == 1)
         g_UsbDeviceAudioSpeakerEndpoints[1].maxPacketSize = ISO_FEEDBACK_ENDP_PACKET_SIZE;
+#endif
     }
     else
     {
         g_UsbDeviceAudioSpeakerEndpoints[0].maxPacketSize = 2 * FS_ISO_OUT_ENDP_PACKET_SIZE;
+#if(USE_FEEDBACK_ENDPOINT == 1)
         g_UsbDeviceAudioSpeakerEndpoints[1].maxPacketSize = ISO_FEEDBACK_ENDP_PACKET_SIZE;
+#endif
     }
 
     return kStatus_USB_Success;

@@ -832,8 +832,18 @@ usb_status_t USB_DeviceAudioCallback(class_handle_t handle, uint32_t event, void
         case kUSB_DeviceAudioEventStreamSendResponse:
             if ((s_audioSpeaker.attach) && (ep_cb_param->length != (USB_UNINITIALIZED_VAL_32)))
             {
-                error = USB_DeviceAudioSend(s_audioSpeaker.audioSpeakerHandle, USB_AUDIO_SPEAKER_FEEDBACK_ENDPOINT,
+#if(USE_FEEDBACK_ENDPOINT == 1)
+            	if(ep_cb_param->length == 0x03)
+            	{
+                    error = USB_DeviceAudioSend(s_audioSpeaker.audioSpeakerHandle, USB_AUDIO_SPEAKER_FEEDBACK_ENDPOINT,
                                             audioFeedBackBuffer, ISO_FEEDBACK_ENDP_PACKET_SIZE);
+            	}
+            	else
+#endif
+            	{
+                    error = USB_DeviceAudioSend(s_audioSpeaker.audioRecorderHandle, USB_AUDIO_RECORDER_STREAM_ENDPOINT,
+                                            &audioDataBuff[tdReadNumber][0], FS_ISO_IN_ENDP_PACKET_SIZE * 2);
+            	}
             }
             break;
         case kUSB_DeviceAudioEventStreamRecvResponse:
@@ -933,15 +943,18 @@ usb_status_t USB_DeviceCallback(usb_device_handle handle, uint32_t event, void *
 
                         if(interface == USB_AUDIO_RECORDER_STREAM_INTERFACE_INDEX)
                         {
-
-
+                            USB_DeviceAudioSend(s_audioSpeaker.audioRecorderHandle, USB_AUDIO_RECORDER_STREAM_ENDPOINT,
+                                                &audioDataBuff[0][0], FS_ISO_IN_ENDP_PACKET_SIZE * 2);
                         }
                         if(interface == USB_AUDIO_SPEAKER_STREAM_INTERFACE_INDEX)
                         {
+
                             USB_DeviceAudioRecv(s_audioSpeaker.audioSpeakerHandle, USB_AUDIO_SPEAKER_STREAM_ENDPOINT, &audioDataBuff[0][0],
                                             FS_ISO_OUT_ENDP_PACKET_SIZE * 2);
+#if(USE_FEEDBACK_ENDPOINT == 1)
                             USB_DeviceAudioSend(s_audioSpeaker.audioSpeakerHandle, USB_AUDIO_SPEAKER_FEEDBACK_ENDPOINT,
                                             audioFeedBackBuffer, ISO_FEEDBACK_ENDP_PACKET_SIZE);
+#endif
                         }
                     }
                 }
