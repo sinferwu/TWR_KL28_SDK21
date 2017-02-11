@@ -100,11 +100,12 @@
 #define EXAMPLE_DMA (DMA0)
 #define EXAMPLE_CHANNEL (0U)
 #define EXAMPLE_SAI_TX_SOURCE kDmaRequestMux0I2S0Tx
+#define EXAMPLE_SAI_RX_SOURCE kDmaRequestMux0I2S0Rx
 #define AUDIO_DATA_WHOLE_BUFFER_LENGTH (32)
 #define AUDIO_DATA_DISCARD_BUFFER_LENGTH (28)
 #define DEMO_SAI_IRQ I2S0_IRQn
 #define I2S_ClearFIFOError_IRQHandler I2S0_IRQHandler
-#define SAI_TxIRQHandler I2S0_IRQHandler
+#define SAI_IRQHandler I2S0_IRQHandler
 #define DEMO_I2C_CLK_FREQ CLOCK_GetFreq(kCLOCK_ScgFircClk)
 #define DEMO_SAI_BITWIDTH (kSAI_WordWidth16bits)
 
@@ -136,19 +137,21 @@ extern void BOARD_Codec_Init(I2C_Type *I2CBase);
 #if defined(USING_CODEC_DA7212)
 extern void BOARD_SAI_TxInit(I2S_Type *SAIBase, uint32_t saiClockFreq);
 #else
-extern void BOARD_SAI_TxInit(I2S_Type *SAIBase);
+extern void BOARD_SAI_TxRxInit(I2S_Type *SAIBase);
 #endif
-extern void BOARD_SAI_TransferTxSetFormat(I2S_Type *SAIBase);
+extern void BOARD_SAI_TransferSetFormat(I2S_Type *SAIBase);
 #if defined(USING_I2S)
 extern void BOARD_I2S_Enable(I2S_Type *SAIBase);
 #endif
+
+void USB_AudioRecDataMatch(void);
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 USB_DATA_ALIGNMENT uint8_t audioDataBuff[AUDIO_DATA_WHOLE_BUFFER_LENGTH][FS_ISO_OUT_ENDP_PACKET_SIZE * 2];
 uint8_t audioBuffLength[AUDIO_DATA_WHOLE_BUFFER_LENGTH] = {0};
-/*uint8_t audioFeedBackBuffer[3] = {0xF0U, 0x00U, 0x04U}; //noise comes every time the recv buffer exceeds the send
+/*uint8_t audioFeedBackBuffer[3] = {0xF0U, 0x00U, 0x04 U}; //noise comes every time the recv buffer exceeds the send
  * buffer */
 USB_DATA_ALIGNMENT uint8_t audioFeedBackBuffer[3] = {0x00U, 0x00U, 0x04U};
 volatile uint32_t startSai = 0;
@@ -166,6 +169,14 @@ volatile bool isFinished = false;
 volatile int32_t prevSendCount =
     -(AUDIO_DATA_WHOLE_BUFFER_LENGTH / 2 * (FS_ISO_OUT_ENDP_PACKET_SIZE / (DEMO_SAI_BITWIDTH / 8U)));
 
+/* Variables used for recording function */
+USB_DATA_ALIGNMENT uint8_t audioRecDataBuff[AUDIO_DATA_WHOLE_BUFFER_LENGTH][FS_ISO_IN_ENDP_PACKET_SIZE];
+volatile uint32_t startSaiRec = 1;
+volatile uint32_t sendCountRec = 0;
+volatile uint32_t recvCountRec = 0;
+volatile uint32_t tdReadNumberRec = 0;
+volatile uint32_t tdWriteNumberRec = 0;
+volatile uint32_t dataRecv = 0;
 
 extern usb_device_class_struct_t g_UsbDeviceAudioClassRecorder;
 extern usb_device_class_struct_t g_UsbDeviceAudioClassSpeaker;
@@ -355,7 +366,7 @@ void I2S_TxIRQHandler(void)
     I2S_WriteData(DEMO_SAI);    // read data from I2S, write to USB
 }
 #elif defined(USING_SAI)
-void SAI_TxIRQHandler(void)
+void SAI_IRQHandler(void)
 {
     uint32_t data = 0;
     uint8_t j = 0;
@@ -399,6 +410,35 @@ void SAI_TxIRQHandler(void)
         }
         SAI_WriteData(DEMO_SAI, EXAMPLE_CHANNEL, data);
     }
+
+    if (SAI_RxGetStatusFlag(DEMO_SAI) & kSAI_FIFOWarningFlag)
+    {
+    	data = SAI_ReadData(DEMO_SAI, EXAMPLE_CHANNEL);
+    	USB_AudioRecDataMatch();
+    	if(startSaiRec)
+    	{
+            for (j = 0; j < DEMO_SAI_BITWIDTH / 8U; j++)
+            {
+                audioRecDataBuff[tdReadNumberRec][dataRecv] = (data >> (8U * j));
+                dataRecv++;
+            }
+            if (dataRecv >= FS_ISO_IN_ENDP_PACKET_SIZE)
+            {
+                dataRecv = 0;
+                tdReadNumberRec++;
+                recvCountRec++;
+
+                if (tdReadNumberRec >= AUDIO_DATA_WHOLE_BUFFER_LENGTH)
+                {
+                    tdReadNumberRec = 0;
+                }
+            }
+    	}
+    	else
+    	{
+
+    	}
+    }
 }
 #endif
 
@@ -411,7 +451,7 @@ void Init_Board_Sai_Codec(void)
 #if defined(USING_CODEC_DA7212)
     BOARD_SAI_TxInit(DEMO_SAI, DEMO_SAI_CLK_FREQ);
 #else
-    BOARD_SAI_TxInit(DEMO_SAI);
+    BOARD_SAI_TxRxInit(DEMO_SAI);
 #endif
 #if defined(FSL_FEATURE_SOC_LPI2C_COUNT) && (FSL_FEATURE_SOC_LPI2C_COUNT)
     BOARD_LPI2C_Init(DEMO_I2C_CLK_FREQ, DEMO_I2C);
@@ -424,11 +464,13 @@ void Init_Board_Sai_Codec(void)
 #if defined(USING_I2S)
     BOARD_I2S_Enable(DEMO_SAI);
 #elif defined(USING_SAI)
-    BOARD_SAI_TransferTxSetFormat(DEMO_SAI);
+    BOARD_SAI_TransferSetFormat(DEMO_SAI);
     /*  Enable interrupt */
     EnableIRQ(DEMO_SAI_IRQ);
     SAI_TxEnableInterrupts(DEMO_SAI, kSAI_FIFOWarningInterruptEnable | kSAI_FIFOErrorInterruptEnable);
+    SAI_RxEnableInterrupts(DEMO_SAI, kSAI_FIFOWarningInterruptEnable | kSAI_FIFOErrorInterruptEnable);
     SAI_TxEnable(DEMO_SAI, true);
+    SAI_RxEnable(DEMO_SAI, true);
 #endif
 }
 
@@ -810,6 +852,21 @@ void USB_AudioDataMatch(uint32_t length)
     dataReadCountInterval = 0;
 }
 
+void USB_AudioRecDataMatch(void)
+{
+    if (((recvCountRec - sendCountRec) > (AUDIO_DATA_WHOLE_BUFFER_LENGTH - 10)) && (startSaiRec == 1))
+    {
+        startSaiRec = 0;
+    }
+    else if ((recvCountRec - sendCountRec) < 4)
+    {
+        startSaiRec = 1;
+    }
+    else
+    {
+    }
+}
+
 /*!
  * @brief Audio class specific callback function.
  *
@@ -841,8 +898,15 @@ usb_status_t USB_DeviceAudioCallback(class_handle_t handle, uint32_t event, void
             	else
 #endif
             	{
+            		sendCountRec++;
+                	USB_AudioRecDataMatch();
+                	tdWriteNumberRec++;
+                	if(tdWriteNumberRec >= AUDIO_DATA_WHOLE_BUFFER_LENGTH)
+                	{
+                		tdWriteNumberRec = 0;
+                	}
                     error = USB_DeviceAudioSend(s_audioSpeaker.audioRecorderHandle, USB_AUDIO_RECORDER_STREAM_ENDPOINT,
-                                            &audioDataBuff[tdReadNumber][0], FS_ISO_IN_ENDP_PACKET_SIZE * 2);
+                                            &audioRecDataBuff[tdWriteNumberRec][0], FS_ISO_IN_ENDP_PACKET_SIZE);
             	}
             }
             break;
@@ -944,7 +1008,7 @@ usb_status_t USB_DeviceCallback(usb_device_handle handle, uint32_t event, void *
                         if(interface == USB_AUDIO_RECORDER_STREAM_INTERFACE_INDEX)
                         {
                             USB_DeviceAudioSend(s_audioSpeaker.audioRecorderHandle, USB_AUDIO_RECORDER_STREAM_ENDPOINT,
-                                                &audioDataBuff[0][0], FS_ISO_IN_ENDP_PACKET_SIZE * 2);
+                                                &audioRecDataBuff[0][0], FS_ISO_IN_ENDP_PACKET_SIZE);
                         }
                         if(interface == USB_AUDIO_SPEAKER_STREAM_INTERFACE_INDEX)
                         {
@@ -1168,7 +1232,7 @@ void main(void)
 #endif
 {
     BOARD_InitPins();
-    BOARD_BootClockHSRUN();
+    BOARD_BootClockRUN();
     BOARD_I2C_ReleaseBus();
     BOARD_I2C_ConfigurePins();
     BOARD_InitDebugConsole();

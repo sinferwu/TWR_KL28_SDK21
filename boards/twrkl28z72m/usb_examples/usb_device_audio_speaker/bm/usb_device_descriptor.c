@@ -669,8 +669,8 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     USB_DESCRIPTOR_TYPE_ENDPOINT,              /* ENDPOINT Descriptor Type   */
     USB_AUDIO_RECORDER_STREAM_ENDPOINT | (USB_IN << 7), /* This is an IN endpoint with endpoint number 2   */
     USB_ENDPOINT_ISOCHRONOUS,                  /* Types - Transfer: ISOCHRONOUS */
-    USB_SHORT_GET_LOW(FS_ISO_IN_ENDP_PACKET_SIZE*2),
-    USB_SHORT_GET_HIGH(FS_ISO_IN_ENDP_PACKET_SIZE*2), /* Maximum packet size for this endpoint is 8 Bytes.  */
+    USB_SHORT_GET_LOW(FS_ISO_IN_ENDP_PACKET_SIZE),
+    USB_SHORT_GET_HIGH(FS_ISO_IN_ENDP_PACKET_SIZE), /* Maximum packet size for this endpoint is 8 Bytes.  */
     FS_ISO_IN_ENDP_INTERVAL, /* The polling interval value is every 1 Frames. If Hi-Speed, every 1 uFrames   */
     0x00U,                /* Refresh Rate 2**n ms where n = 0   */
     0x00U,                /* Synchronization Endpoint (if used) is endpoint 0   */

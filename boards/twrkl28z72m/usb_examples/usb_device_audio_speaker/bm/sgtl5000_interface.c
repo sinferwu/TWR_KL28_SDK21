@@ -108,7 +108,7 @@ void BOARD_Codec_Init(LPI2C_Type *LPI2CBase)
     sgtl_config_t codecConfig;
     codecConfig.bus = kSGTL_BusLeftJustified;
     codecConfig.master_slave = true;
-    codecConfig.route = kSGTL_RoutePlayback;
+    codecConfig.route = kSGTL_RoutePlaybackandRecord;
     SGTL_Init(&codecHandle, &codecConfig);
     /* Configure codec audioFormat */
     SGTL_ConfigDataFormat(&codecHandle, audioFormat.masterClockHz, audioFormat.sampleRate_Hz, audioFormat.bitWidth);
@@ -159,9 +159,10 @@ void BOARD_Config_Audio_Formats(void)
 #endif
 }
 
-void BOARD_SAI_TxInit(I2S_Type *SAIBase)
+void BOARD_SAI_TxRxInit(I2S_Type *SAIBase)
 {
     SAI_TxGetDefaultConfig(&saiConfig);
+    SAI_RxGetDefaultConfig(&saiConfig);
 
     saiConfig.masterSlave = kSAI_Slave;
 #if defined(FSL_FEATURE_SAI_HAS_MCR) && (FSL_FEATURE_SAI_HAS_MCR)
@@ -169,13 +170,15 @@ void BOARD_SAI_TxInit(I2S_Type *SAIBase)
 #endif
 
     SAI_TxInit(SAIBase, &saiConfig);
+    SAI_RxInit(SAIBase, &saiConfig);
     BOARD_Config_Audio_Formats();
 }
 
-void BOARD_SAI_TransferTxSetFormat(I2S_Type *SAIBase)
+void BOARD_SAI_TransferSetFormat(I2S_Type *SAIBase)
 {
     uint32_t mclkSourceClockHz = 0U;
     mclkSourceClockHz = CLOCK_GetFreq(kCLOCK_CoreSysClk);
 
     SAI_TxSetFormat(SAIBase, &audioFormat, mclkSourceClockHz, audioFormat.masterClockHz);
+    SAI_RxSetFormat(SAIBase, &audioFormat, mclkSourceClockHz, audioFormat.masterClockHz);
 }

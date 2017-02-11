@@ -302,7 +302,8 @@ status_t SGTL_SetDataRoute(sgtl_handle_t *handle, sgtl_route_t route)
             SGTL_EnableModule(handle, kSGTL_ModuleADC);
             SGTL_ModifyReg(handle, CHIP_SSS_CTRL, SGTL5000_DAC_SEL_CLR_MASK, SGTL5000_DAC_SEL_I2S_IN);
             SGTL_ModifyReg(handle, CHIP_ANA_CTRL, SGTL5000_SEL_HP_CLR_MASK, SGTL5000_SEL_HP_DAC);
-            SGTL_ModifyReg(handle, CHIP_ANA_CTRL, SGTL5000_SEL_ADC_CLR_MASK, SGTL5000_SEL_ADC_LINEIN);
+            SGTL_ModifyReg(handle, CHIP_ANA_CTRL, SGTL5000_SEL_ADC_CLR_MASK, SGTL5000_SEL_ADC_MIC);
+            //SGTL_ModifyReg(handle, CHIP_ANA_CTRL, SGTL5000_SEL_ADC_CLR_MASK, SGTL5000_SEL_ADC_LINEIN);
             SGTL_ModifyReg(handle, CHIP_SSS_CTRL, SGTL5000_I2S_OUT_SEL_CLR_MASK, SGTL5000_I2S_OUT_SEL_ADC);
             break;
         case kSGTL_RoutePlaybackwithDAP:
@@ -334,7 +335,8 @@ status_t SGTL_SetDataRoute(sgtl_handle_t *handle, sgtl_route_t route)
             /* LINE_IN->ADC->I2S_OUT */
             SGTL_EnableModule(handle, kSGTL_ModuleI2SOUT);
             SGTL_EnableModule(handle, kSGTL_ModuleADC);
-            SGTL_ModifyReg(handle, CHIP_ANA_CTRL, SGTL5000_SEL_ADC_CLR_MASK, SGTL5000_SEL_ADC_LINEIN);
+            SGTL_ModifyReg(handle, CHIP_ANA_CTRL, SGTL5000_SEL_ADC_CLR_MASK, SGTL5000_SEL_ADC_MIC);
+            //SGTL_ModifyReg(handle, CHIP_ANA_CTRL, SGTL5000_SEL_ADC_CLR_MASK, SGTL5000_SEL_ADC_LINEIN);
             SGTL_ModifyReg(handle, CHIP_SSS_CTRL, SGTL5000_I2S_OUT_SEL_CLR_MASK, SGTL5000_I2S_OUT_SEL_ADC);
             break;
         default:

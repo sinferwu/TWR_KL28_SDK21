@@ -77,6 +77,7 @@ PinsProfile:
 #define PIN5_IDX                         5u   /*!< Pin number for pin 5 in a port */
 #define PIN12_IDX                       12u   /*!< Pin number for pin 12 in a port */
 #define PIN13_IDX                       13u   /*!< Pin number for pin 13 in a port */
+#define PIN15_IDX                       15u   /*!< Pin number for pin 15 in a port */
 #define PIN17_IDX                       17u   /*!< Pin number for pin 17 in a port */
 
 /*
@@ -105,6 +106,7 @@ void BOARD_InitPins(void) {
   PORT_SetPinMux(PORTA, PIN1_IDX, kPORT_MuxAlt2);            /* PORTA1 (pin 35) is configured as LPUART0_RX */
   PORT_SetPinMux(PORTA, PIN12_IDX, kPORT_MuxAlt6);           /* PORTA12 (pin 42) is configured as I2S0_TXD0 */
   PORT_SetPinMux(PORTA, PIN13_IDX, kPORT_MuxAlt6);           /* PORTA13 (pin 43) is configured as I2S0_TX_FS */
+  PORT_SetPinMux(PORTA, PIN15_IDX, kPORT_MuxAlt6);           /* PORTA15 (pin 45) is configured as I2S0_RXD0 */
   PORT_SetPinMux(PORTA, PIN17_IDX, kPORT_MuxAlt6);           /* PORTA17 (pin 47) is configured as I2S0_MCLK */
   PORT_SetPinMux(PORTA, PIN2_IDX, kPORT_MuxAlt2);            /* PORTA2 (pin 36) is configured as LPUART0_TX */
   PORT_SetPinMux(PORTA, PIN5_IDX, kPORT_MuxAlt6);            /* PORTA5 (pin 39) is configured as I2S0_TX_BCLK */
