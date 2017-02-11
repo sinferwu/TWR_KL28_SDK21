@@ -75,6 +75,12 @@
 #if (defined(FSL_FEATURE_SOC_MPU_COUNT) && (FSL_FEATURE_SOC_MPU_COUNT > 0U))
 #include "fsl_mpu.h"
 #endif /* FSL_FEATURE_SOC_MPU_COUNT */
+#if defined(USING_I2S)
+#include "fsl_i2s.h"
+#elif defined(USING_SAI)
+#include "fsl_sai.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -82,8 +88,15 @@
 #include "usb_phy.h"
 #endif
 
+#include "fsl_sgtl5000.h"
 #include "fsl_common.h"
+#include "fsl_gpio.h"
+#include "fsl_port.h"
 #include "pin_mux.h"
+
+#include "app.h"
+
+
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
@@ -94,9 +107,27 @@
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
+void BOARD_I2C_ReleaseBus(void);
 void BOARD_InitHardware(void);
 usb_status_t USB_DeviceAudioCallback(class_handle_t handle, uint32_t event, void *param);
 usb_status_t USB_DeviceCallback(usb_device_handle handle, uint32_t event, void *param);
+#if defined(FSL_FEATURE_SOC_LPI2C_COUNT) && (FSL_FEATURE_SOC_LPI2C_COUNT)
+extern void BOARD_LPI2C_Init(uint32_t boardI2CClock, LPI2C_Type *LPI2CBase);
+extern void BOARD_Codec_Init(LPI2C_Type *LPI2CBase);
+#else
+extern void BOARD_I2C_Init(uint32_t boardI2CClock, I2C_Type *I2CBase);
+extern void BOARD_Codec_Init(I2C_Type *I2CBase);
+#endif
+#if defined(USING_CODEC_DA7212)
+extern void BOARD_SAI_TxInit(I2S_Type *SAIBase, uint32_t saiClockFreq);
+#else
+extern void BOARD_SAI_TxRxInit(I2S_Type *SAIBase);
+#endif
+extern void BOARD_SAI_TransferSetFormat(I2S_Type *SAIBase);
+#if defined(USING_I2S)
+extern void BOARD_I2S_Enable(I2S_Type *SAIBase);
+#endif
+
 extern void USB_PrepareData(void);
 #if defined(AUDIO_DATA_SOURCE_DMIC) && (AUDIO_DATA_SOURCE_DMIC > 0U)
 extern void Board_DMIC_DMA_Init(void);
@@ -107,6 +138,15 @@ extern void Board_DMIC_DMA_Init(void);
  ******************************************************************************/
 /* Audio data information */
 extern uint8_t s_wavBuff[];
+
+USB_DATA_ALIGNMENT uint8_t audioDataBuff[AUDIO_DATA_WHOLE_BUFFER_LENGTH][FS_ISO_IN_ENDP_PACKET_SIZE];
+volatile uint32_t startRecord = 0;
+volatile uint32_t startSai = 1;
+volatile uint32_t sendCount = 0;
+volatile uint32_t recvCount = 0;
+volatile uint32_t tdReadNumber = 0;
+volatile uint32_t tdWriteNumber = 0;
+volatile uint32_t dataRecv = 0;
 
 extern usb_device_class_struct_t g_UsbDeviceAudioClass;
 
@@ -155,6 +195,203 @@ static usb_device_class_config_struct_t s_audioConfig[1] = {{
 static usb_device_class_config_list_struct_t s_audioConfigList = {
     s_audioConfig, USB_DeviceCallback, 1U,
 };
+
+/*******************************************************************************
+* Code
+******************************************************************************/
+static void i2c_release_bus_delay(void)
+{
+    uint32_t i = 0;
+    for (i = 0; i < I2C_RELEASE_BUS_COUNT; i++)
+    {
+        __NOP();
+    }
+}
+
+void BOARD_I2C_ReleaseBus(void)
+{
+    uint8_t i = 0;
+    gpio_pin_config_t pin_config;
+    port_pin_config_t i2c_pin_config = {0};
+
+    /* Config pin mux as gpio */
+    i2c_pin_config.pullSelect = kPORT_PullUp;
+    i2c_pin_config.mux = kPORT_MuxAsGpio;
+
+    pin_config.pinDirection = kGPIO_DigitalOutput;
+    pin_config.outputLogic = 1U;
+    CLOCK_EnableClock(kCLOCK_PortC);
+    PORT_SetPinConfig(I2C_RELEASE_SCL_PORT, I2C_RELEASE_SCL_PIN, &i2c_pin_config);
+    PORT_SetPinConfig(I2C_RELEASE_SDA_PORT, I2C_RELEASE_SDA_PIN, &i2c_pin_config);
+
+    GPIO_PinInit(I2C_RELEASE_SCL_GPIO, I2C_RELEASE_SCL_PIN, &pin_config);
+    GPIO_PinInit(I2C_RELEASE_SDA_GPIO, I2C_RELEASE_SDA_PIN, &pin_config);
+
+    /* Drive SDA low first to simulate a start */
+    GPIO_WritePinOutput(I2C_RELEASE_SDA_GPIO, I2C_RELEASE_SDA_PIN, 0U);
+    i2c_release_bus_delay();
+
+    /* Send 9 pulses on SCL and keep SDA low */
+    for (i = 0; i < 9; i++)
+    {
+        GPIO_WritePinOutput(I2C_RELEASE_SCL_GPIO, I2C_RELEASE_SCL_PIN, 0U);
+        i2c_release_bus_delay();
+
+        GPIO_WritePinOutput(I2C_RELEASE_SDA_GPIO, I2C_RELEASE_SDA_PIN, 1U);
+        i2c_release_bus_delay();
+
+        GPIO_WritePinOutput(I2C_RELEASE_SCL_GPIO, I2C_RELEASE_SCL_PIN, 1U);
+        i2c_release_bus_delay();
+        i2c_release_bus_delay();
+    }
+
+    /* Send stop */
+    GPIO_WritePinOutput(I2C_RELEASE_SCL_GPIO, I2C_RELEASE_SCL_PIN, 0U);
+    i2c_release_bus_delay();
+
+    GPIO_WritePinOutput(I2C_RELEASE_SDA_GPIO, I2C_RELEASE_SDA_PIN, 0U);
+    i2c_release_bus_delay();
+
+    GPIO_WritePinOutput(I2C_RELEASE_SCL_GPIO, I2C_RELEASE_SCL_PIN, 1U);
+    i2c_release_bus_delay();
+
+    GPIO_WritePinOutput(I2C_RELEASE_SDA_GPIO, I2C_RELEASE_SDA_PIN, 1U);
+    i2c_release_bus_delay();
+}
+
+void USB_AudioDataMatch(void)
+{
+    if (((recvCount - sendCount) > (AUDIO_DATA_WHOLE_BUFFER_LENGTH - 10)) && (startSai == 1))
+    {
+        startSai = 0;
+    }
+    else if(((recvCount - sendCount) >= (AUDIO_DATA_WHOLE_BUFFER_LENGTH - 2)))
+    {
+        //audioBufferIsFull = 1;
+    }
+    else if ((recvCount - sendCount) < 4)
+    {
+        //audioBufferIsFull = 0;
+        startSai = 1;
+    }
+    else
+    {
+    }
+}
+
+void SAI_TxRxIRQHandler(void)
+{
+    uint32_t data = 0;
+    uint8_t j = 0;
+    //uint32_t temp = 0;
+
+    /* Clear the FIFO error flag */
+    if (SAI_TxGetStatusFlag(DEMO_SAI) & kSAI_FIFOErrorFlag)
+    {
+        SAI_TxClearStatusFlags(DEMO_SAI, kSAI_FIFOErrorFlag);
+    }
+
+    if (SAI_RxGetStatusFlag(DEMO_SAI) & kSAI_FIFOErrorFlag)
+    {
+        SAI_RxClearStatusFlags(DEMO_SAI, kSAI_FIFOErrorFlag);
+    }
+
+    if (SAI_TxGetStatusFlag(DEMO_SAI) & kSAI_FIFOWarningFlag)
+    {
+#if 0
+        if (startSai)
+        {
+            for (j = 0; j < DEMO_SAI_BITWIDTH / 8U; j++)
+            {
+                temp = (uint32_t)(audioDataBuff[tdWriteNumber][dataSend]);
+                data |= (temp << (8U * j));
+                dataSend++;
+            }
+            if (dataSend >= audioBuffLength[tdWriteNumber])
+            {
+                dataSend = 0;
+                dataSendCountInterval += audioBuffLength[tdWriteNumber];
+                tdWriteNumber++;
+                sendCount++;
+                if (sendCount >= recvCount)
+                {
+                    startSai = 0;
+                }
+                if (tdWriteNumber >= AUDIO_DATA_WHOLE_BUFFER_LENGTH)
+                {
+                    tdWriteNumber = 0;
+                }
+            }
+        }
+        else
+        {
+            data = 0;
+        }
+        SAI_WriteData(DEMO_SAI, EXAMPLE_CHANNEL, data);
+#endif
+    }
+
+    if (SAI_RxGetStatusFlag(DEMO_SAI) & kSAI_FIFOWarningFlag)
+    {
+    	data = SAI_ReadData(DEMO_SAI, EXAMPLE_CHANNEL);
+    	USB_AudioDataMatch();
+    	if(startSai)
+    	{
+            for (j = 0; j < DEMO_SAI_BITWIDTH / 8U; j++)
+            {
+                audioDataBuff[tdReadNumber][dataRecv] = (data >> (8U * j));
+                dataRecv++;
+            }
+            if (dataRecv >= FS_ISO_IN_ENDP_PACKET_SIZE)
+            {
+                dataRecv = 0;
+                tdReadNumber++;
+                recvCount++;
+
+                if (tdReadNumber >= AUDIO_DATA_WHOLE_BUFFER_LENGTH)
+                {
+                    tdReadNumber = 0;
+                }
+            }
+    	}
+    	else
+    	{
+
+    	}
+    }
+}
+
+/* Initialize the structure information for sai. */
+void Init_Board_Sai_Codec(void)
+{
+    usb_echo("Init Audio SAI and CODEC\r\n");
+
+/* Init SAI module */
+#if defined(USING_CODEC_DA7212)
+    BOARD_SAI_TxInit(DEMO_SAI, DEMO_SAI_CLK_FREQ);
+#else
+    BOARD_SAI_TxRxInit(DEMO_SAI);
+#endif
+#if defined(FSL_FEATURE_SOC_LPI2C_COUNT) && (FSL_FEATURE_SOC_LPI2C_COUNT)
+    BOARD_LPI2C_Init(DEMO_I2C_CLK_FREQ, DEMO_I2C);
+#else
+    BOARD_I2C_Init(DEMO_I2C_CLK_FREQ, DEMO_I2C);
+#endif
+
+    BOARD_Codec_Init(DEMO_I2C);
+
+#if defined(USING_I2S)
+    BOARD_I2S_Enable(DEMO_SAI);
+#elif defined(USING_SAI)
+    BOARD_SAI_TransferSetFormat(DEMO_SAI);
+    /*  Enable interrupt */
+    EnableIRQ(DEMO_SAI_IRQ);
+    //SAI_TxEnableInterrupts(DEMO_SAI, kSAI_FIFOWarningInterruptEnable | kSAI_FIFOErrorInterruptEnable);
+    SAI_RxEnableInterrupts(DEMO_SAI, kSAI_FIFOWarningInterruptEnable | kSAI_FIFOErrorInterruptEnable);
+    SAI_TxEnable(DEMO_SAI, true);
+    SAI_RxEnable(DEMO_SAI, true);
+#endif
+}
 
 /*******************************************************************************
 * Code
@@ -479,8 +716,15 @@ usb_status_t USB_DeviceAudioCallback(class_handle_t handle, uint32_t event, void
                 (ep_cb_param->length == ((USB_SPEED_HIGH == s_audioGenerator.speed) ? HS_ISO_IN_ENDP_PACKET_SIZE :
                                                                                       FS_ISO_IN_ENDP_PACKET_SIZE)))
             {
-                USB_PrepareData();
-                error = USB_DeviceAudioSend(handle, USB_AUDIO_STREAM_ENDPOINT, s_wavBuff,
+                //USB_PrepareData();
+            	sendCount++;
+            	USB_AudioDataMatch();
+            	tdWriteNumber++;            
+            	if(tdWriteNumber >= AUDIO_DATA_WHOLE_BUFFER_LENGTH)
+            	{
+            		tdWriteNumber = 0;
+            	}
+                error = USB_DeviceAudioSend(handle, USB_AUDIO_STREAM_ENDPOINT, &audioDataBuff[tdWriteNumber][0],
                                             (USB_SPEED_HIGH == s_audioGenerator.speed) ? HS_ISO_IN_ENDP_PACKET_SIZE :
                                                                                          FS_ISO_IN_ENDP_PACKET_SIZE);
             }
@@ -551,8 +795,8 @@ usb_status_t USB_DeviceCallback(usb_device_handle handle, uint32_t event, void *
                     s_audioGenerator.currentInterfaceAlternateSetting[interface] = alternateSetting;
                     if (alternateSetting == 1U)
                     {
-                        USB_PrepareData();
-                        USB_DeviceAudioSend(s_audioGenerator.audioHandle, USB_AUDIO_STREAM_ENDPOINT, s_wavBuff,
+                        //USB_PrepareData();
+                        USB_DeviceAudioSend(s_audioGenerator.audioHandle, USB_AUDIO_STREAM_ENDPOINT, &audioDataBuff[0][0],
                                             (USB_SPEED_HIGH == s_audioGenerator.speed) ? HS_ISO_IN_ENDP_PACKET_SIZE :
                                                                                          FS_ISO_IN_ENDP_PACKET_SIZE);
                     }
@@ -734,6 +978,8 @@ void APPInit(void)
 #endif /* FSL_FEATURE_USB_KHCI_USB_RAM_BASE_ADDRESS */
 #endif /* FSL_FEATURE_USB_KHCI_USB_RAM */
 
+    Init_Board_Sai_Codec();
+
     if (kStatus_USB_Success != USB_DeviceClassInit(CONTROLLER_ID, &s_audioConfigList, &s_audioGenerator.deviceHandle))
     {
         usb_echo("USB device failed\r\n");
@@ -770,11 +1016,19 @@ void main(void)
 {
     BOARD_InitPins();
     BOARD_BootClockRUN();
+    BOARD_I2C_ReleaseBus();
+    BOARD_I2C_ConfigurePins();
     BOARD_InitDebugConsole();
 
 #if defined(AUDIO_DATA_SOURCE_DMIC) && (AUDIO_DATA_SOURCE_DMIC > 0U)
     Board_DMIC_DMA_Init();
 #endif
+
+    /* Choose clock source for LPI2C */
+    CLOCK_SetIpSrc(kCLOCK_Lpi2c0, kCLOCK_IpSrcFircAsync);
+
+    /* Choose clock source for SAI */
+    CLOCK_SetIpSrc(kCLOCK_Sai0, kCLOCK_IpSrcFircAsync);
 
     APPInit();
 

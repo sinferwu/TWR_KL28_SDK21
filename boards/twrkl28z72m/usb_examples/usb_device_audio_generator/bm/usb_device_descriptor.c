@@ -327,17 +327,17 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     USB_DESCRIPTOR_SUBTYPE_AUDIO_STREAMING_FORMAT_TYPE,
     /* FORMAT_TYPE descriptor subtype  */
     USB_AUDIO_FORMAT_TYPE_I, /* FORMAT_TYPE_I  */
-    0x01U,                   /* Indicates the number of physical channels in the audio data stream.  */
+    0x02U,                   /* Indicates the number of physical channels in the audio data stream.  */
 #if defined(AUDIO_DATA_SOURCE_DMIC) && (AUDIO_DATA_SOURCE_DMIC > 0U)
     0x02U,             /* The number of bytes occupied by one audio subframe. Can be 1, 2, 3 or 4.   */
     0x10,              /* The number of effectively used bits from the available bits in an audio subframe.*/
     0x01U,             /* Indicates how the sampling frequency can be programmed:   */
     0x80, 0x3E, 0x00U, /* Sampling frequency 1 in Hz for this isochronous data endpoint.   */
 #else
-    0x01U,             /* The number of bytes occupied by one audio subframe. Can be 1, 2, 3 or 4.   */
-    0x08,              /* The number of effectively used bits from the available bits in an audio subframe.*/
+    0x02U,             /* The number of bytes occupied by one audio subframe. Can be 1, 2, 3 or 4.   */
+    0x10,              /* The number of effectively used bits from the available bits in an audio subframe.*/
     0x01U,             /* Indicates how the sampling frequency can be programmed:   */
-    0x40, 0x1F, 0x00U, /* Sampling frequency 1 in Hz for this isochronous data endpoint.   */
+    0x80, 0x3E, 0x00U, /* Sampling frequency 1 in Hz for this isochronous data endpoint.   */
 #endif
     /* ENDPOINT Descriptor */
     USB_ENDPOINT_AUDIO_DESCRIPTOR_LENGTH,      /* Descriptor size is 9 bytes  */
