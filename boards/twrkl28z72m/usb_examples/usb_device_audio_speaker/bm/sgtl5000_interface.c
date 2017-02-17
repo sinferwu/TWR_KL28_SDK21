@@ -149,7 +149,9 @@ void BOARD_Config_Audio_Formats(void)
     /* Configure the audio audioFormat */
     audioFormat.bitWidth = kSAI_WordWidth16bits;
     audioFormat.channel = 0U;
-    audioFormat.sampleRate_Hz = kSAI_SampleRate16KHz;
+
+    //audioFormat.sampleRate_Hz = kSAI_SampleRate16KHz;
+    audioFormat.sampleRate_Hz = kSAI_SampleRate48KHz;
 
     audioFormat.masterClockHz = SGTL_ON_BOARD_OSCILLATOR_FREQUENCY;
     audioFormat.protocol = saiConfig.protocol;

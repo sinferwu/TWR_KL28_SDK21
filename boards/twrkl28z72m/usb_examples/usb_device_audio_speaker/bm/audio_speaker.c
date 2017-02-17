@@ -101,12 +101,13 @@
 #define EXAMPLE_CHANNEL (0U)
 #define EXAMPLE_SAI_TX_SOURCE kDmaRequestMux0I2S0Tx
 #define EXAMPLE_SAI_RX_SOURCE kDmaRequestMux0I2S0Rx
-#define AUDIO_DATA_WHOLE_BUFFER_LENGTH (32)
+#define AUDIO_DATA_WHOLE_BUFFER_LENGTH (16)
 #define AUDIO_DATA_DISCARD_BUFFER_LENGTH (28)
 #define DEMO_SAI_IRQ I2S0_IRQn
 #define I2S_ClearFIFOError_IRQHandler I2S0_IRQHandler
 #define SAI_IRQHandler I2S0_IRQHandler
 #define DEMO_I2C_CLK_FREQ CLOCK_GetFreq(kCLOCK_ScgFircClk)
+/* May need to change this macro if bit width needs to change to 24bit */
 #define DEMO_SAI_BITWIDTH (kSAI_WordWidth16bits)
 
 #define I2C_RELEASE_SDA_PORT PORTC
@@ -150,7 +151,7 @@ void USB_AudioRecDataMatch(void);
  * Variables
  ******************************************************************************/
 USB_DATA_ALIGNMENT uint8_t audioDataBuff[AUDIO_DATA_WHOLE_BUFFER_LENGTH][FS_ISO_OUT_ENDP_PACKET_SIZE * 2];
-uint8_t audioBuffLength[AUDIO_DATA_WHOLE_BUFFER_LENGTH] = {0};
+uint16_t audioBuffLength[AUDIO_DATA_WHOLE_BUFFER_LENGTH] = {0};
 /*uint8_t audioFeedBackBuffer[3] = {0xF0U, 0x00U, 0x04 U}; //noise comes every time the recv buffer exceeds the send
  * buffer */
 USB_DATA_ALIGNMENT uint8_t audioFeedBackBuffer[3] = {0x00U, 0x00U, 0x04U};
@@ -378,6 +379,12 @@ void SAI_IRQHandler(void)
         SAI_TxClearStatusFlags(DEMO_SAI, kSAI_FIFOErrorFlag);
     }
 
+    /* Clear the FIFO error flag */
+    if (SAI_RxGetStatusFlag(DEMO_SAI) & kSAI_FIFOErrorFlag)
+    {
+        SAI_RxClearStatusFlags(DEMO_SAI, kSAI_FIFOErrorFlag);
+    }
+    
     if (SAI_TxGetStatusFlag(DEMO_SAI) & kSAI_FIFOWarningFlag)
     {
         if (startSai)
@@ -390,6 +397,7 @@ void SAI_IRQHandler(void)
             }
             if (dataSend >= audioBuffLength[tdWriteNumber])
             {
+                //GPIO_TogglePinsOutput(GPIOA, 1 << 14);
                 dataSend = 0;
                 dataSendCountInterval += audioBuffLength[tdWriteNumber];
                 tdWriteNumber++;
@@ -424,6 +432,7 @@ void SAI_IRQHandler(void)
             }
             if (dataRecv >= FS_ISO_IN_ENDP_PACKET_SIZE)
             {
+                GPIO_TogglePinsOutput(GPIOA, 1 << 14);
                 dataRecv = 0;
                 tdReadNumberRec++;
                 recvCountRec++;
@@ -466,6 +475,7 @@ void Init_Board_Sai_Codec(void)
 #elif defined(USING_SAI)
     BOARD_SAI_TransferSetFormat(DEMO_SAI);
     /*  Enable interrupt */
+    NVIC_SetPriority(DEMO_SAI_IRQ, SAI_INTERRUPT_PRIORITY);
     EnableIRQ(DEMO_SAI_IRQ);
     SAI_TxEnableInterrupts(DEMO_SAI, kSAI_FIFOWarningInterruptEnable | kSAI_FIFOErrorInterruptEnable);
     SAI_RxEnableInterrupts(DEMO_SAI, kSAI_FIFOWarningInterruptEnable | kSAI_FIFOErrorInterruptEnable);
@@ -813,8 +823,12 @@ void USB_AudioDataMatch(uint32_t length)
     static int32_t sendRecvDiff = 0;
     static int32_t dataReadCountInterval = 0;
     static int32_t threshold = AUDIO_DATA_THRESHOLD;
+#if(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_16K)
     static uint32_t feedBackData = 0x40000U;
-
+#elif(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_48K)
+    static uint32_t feedBackData = 0xC0000U;
+#endif
+    
     intervalRecvCount++;
     dataReadCountInterval += length;
     if (intervalRecvCount != 1000)
@@ -834,19 +848,31 @@ void USB_AudioDataMatch(uint32_t length)
     if ((sendRecvDiff >= (-FS_ISO_OUT_ENDP_PACKET_SIZE)) && (sendRecvDiff <= (FS_ISO_OUT_ENDP_PACKET_SIZE)))
     {
         threshold = AUDIO_DATA_THRESHOLD;
+#if(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_16K)
         feedBackData = 0x40000U;
+#elif(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_48K)
+        feedBackData = 0xC0000U;
+#endif
         USB_SplitFeedbackData(feedBackData);
     }
     if (sendRecvDiff <= -threshold)
     {
         threshold += AUDIO_DATA_THRESHOLD;
+#if(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_16K)
         feedBackData -= 0x40U;
+#elif(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_48K)
+        feedBackData -= 0xC0U;
+#endif
         USB_SplitFeedbackData(feedBackData);
     }
     if (sendRecvDiff >= threshold)
     {
         threshold += AUDIO_DATA_THRESHOLD;
+#if(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_16K)
         feedBackData += 0x40U;
+#elif(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_48K)
+        feedBackData += 0xC0U;
+#endif
         USB_SplitFeedbackData(feedBackData);
     }
     dataReadCountInterval = 0;
@@ -858,7 +884,7 @@ void USB_AudioRecDataMatch(void)
     {
         startSaiRec = 0;
     }
-    else if ((recvCountRec - sendCountRec) < 4)
+    else if (((recvCountRec - sendCountRec) < 4) || (recvCountRec < sendCountRec))
     {
         startSaiRec = 1;
     }
@@ -898,6 +924,7 @@ usb_status_t USB_DeviceAudioCallback(class_handle_t handle, uint32_t event, void
             	else
 #endif
             	{
+                        GPIO_TogglePinsOutput(GPIOA, 1 << 16);
             		sendCountRec++;
                 	USB_AudioRecDataMatch();
                 	tdWriteNumberRec++;
@@ -913,6 +940,7 @@ usb_status_t USB_DeviceAudioCallback(class_handle_t handle, uint32_t event, void
         case kUSB_DeviceAudioEventStreamRecvResponse:
             if ((s_audioSpeaker.attach) && (ep_cb_param->length != (USB_UNINITIALIZED_VAL_32)))
             {
+                //GPIO_TogglePinsOutput(GPIOA, 1 << 16);
                 recvCount++;
                 if (((recvCount - sendCount) > AUDIO_DATA_WHOLE_BUFFER_LENGTH / 2) && (startSai == 0))
                 {
@@ -1231,11 +1259,24 @@ int main(void)
 void main(void)
 #endif
 {
+    gpio_pin_config_t pta14_config = {
+        kGPIO_DigitalOutput, 0,
+    };
+    gpio_pin_config_t pta16_config = {
+        kGPIO_DigitalOutput, 0,
+    };
+    
     BOARD_InitPins();
     BOARD_BootClockRUN();
     BOARD_I2C_ReleaseBus();
     BOARD_I2C_ConfigurePins();
     BOARD_InitDebugConsole();
+    
+    PORT_SetPinMux(PORTA, 14, kPORT_MuxAsGpio);
+    PORT_SetPinMux(PORTA, 16, kPORT_MuxAsGpio);
+    
+    GPIO_PinInit(GPIOA, 14, &pta14_config);
+    GPIO_PinInit(GPIOA, 16, &pta16_config);
 
     /* Choose clock source for LPI2C */
     CLOCK_SetIpSrc(kCLOCK_Lpi2c0, kCLOCK_IpSrcFircAsync);

@@ -80,6 +80,7 @@
 #endif
 
 #define USB_DEVICE_INTERRUPT_PRIORITY (3U)
+#define SAI_INTERRUPT_PRIORITY (2U)
 
 typedef struct _usb_audio_speaker_struct
 {

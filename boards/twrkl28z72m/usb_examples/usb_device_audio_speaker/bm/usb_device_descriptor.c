@@ -90,7 +90,7 @@ usb_device_endpoint_struct_t g_UsbDeviceAudioSpeakerEndpoints[USB_AUDIO_SPEAKER_
     /* Audio generator ISO OUT pipe */
 	{
 	    USB_AUDIO_SPEAKER_STREAM_ENDPOINT | (USB_OUT << USB_DESCRIPTOR_ENDPOINT_ADDRESS_DIRECTION_SHIFT),
-	    USB_ENDPOINT_ISOCHRONOUS, FS_ISO_OUT_ENDP_PACKET_SIZE,
+	    USB_ENDPOINT_ISOCHRONOUS, FS_ISO_OUT_ENDP_PACKET_SIZE*2,
 	},
 #if (USE_FEEDBACK_ENDPOINT == 1)
     {
@@ -658,12 +658,15 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     USB_DESCRIPTOR_SUBTYPE_AUDIO_STREAMING_FORMAT_TYPE,
     /* FORMAT_TYPE descriptor subtype  */
     USB_AUDIO_FORMAT_TYPE_I, /* FORMAT_TYPE_I  */
-    0x02U,                   /* Indicates the number of physical channels in the audio data stream.  */
-    0x02U,             /* The number of bytes occupied by one audio subframe. Can be 1, 2, 3 or 4.   */
-    0x10,              /* The number of effectively used bits from the available bits in an audio subframe.*/
+	AUDIO_FORMAT_CHANNELS,   /* Indicates the number of physical channels in the audio data stream.  */
+	AUDIO_FORMAT_SIZE,       /* The number of bytes occupied by one audio subframe. Can be 1, 2, 3 or 4.   */
+	AUDIO_FORMAT_BITS,       /* The number of effectively used bits from the available bits in an audio subframe.*/
     0x01U,             /* Indicates how the sampling frequency can be programmed:   */
+#if(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_16K)
     0x80, 0x3E, 0x00U, /* Sampling frequency 1 in Hz for this isochronous data endpoint.   */
-
+#elif(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_48K)
+    0x80, 0xBB, 0x00U, /* Sampling frequency 1 in Hz for this isochronous data endpoint.   */ 
+#endif
     /* ENDPOINT Descriptor */
     USB_ENDPOINT_AUDIO_DESCRIPTOR_LENGTH,      /* Descriptor size is 9 bytes  */
     USB_DESCRIPTOR_TYPE_ENDPOINT,              /* ENDPOINT Descriptor Type   */
@@ -730,8 +733,11 @@ uint8_t g_UsbDeviceConfigurationDescriptor[USB_DESCRIPTOR_LENGTH_CONFIGURATION_A
     AUDIO_FORMAT_BITS,                                  /* Bit Resolution: 8 bits per sample */
     0x01U,                                              /* One frequency supported */
                                                         /*   0x40, 0x1F,0x00U,                  8 kHz */
+#if(AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_16K)
     0x80U, 0x3EU, 0x00U,                                /* 16 kHz */
-                                                        /*   0x80,0xBB,0x00U,                  48 kHz */
+#elif (AUDIO_FORMAT_SAMPLE_RATE == AUDIO_FORMAT_SAMPLE_RATE_48K)
+    0x80,0xBB,0x00U,                                    /* 48 kHz */
+#endif
                                                         /*   0x00U, 0xFA,0x00U,                72 kHz */
 
     /* ENDPOINT Descriptor */
